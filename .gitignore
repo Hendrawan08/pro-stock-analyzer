@@ -1,0 +1,13 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Model ML (akan dibuat otomatis di server)
+machine_learning/saved_model.joblib
+machine_learning/model_accuracy.txt
+
+# Streamlit secrets
+.streamlit/
+
+# macOS cache
+.DS_Store
