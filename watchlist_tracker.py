@@ -64,4 +64,4 @@ class WatchlistTracker:
                     st.session_state[self.WATCHLIST_KEY] = df["symbol"].tolist()
                     st.toast("📂 Watchlist berhasil dimuat dari Excel.")
             except Exception as e:
-                st.error(f"❌ Gagal memuat watchlist dari Excel: {e}")
+                st.toast(f"❌ Gagal memuat watchlist dari Excel: {e}")
