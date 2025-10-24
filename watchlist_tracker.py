@@ -3,13 +3,17 @@ import streamlit as st
 import pandas as pd
 from sqlalchemy.exc import IntegrityError # Untuk mendeteksi duplikat
 
-# --- FUNGSI HELPER (DI LUAR CLASS) ---
-# Ini adalah perbaikan V3.2. Kita mengganti 'conn' menjadi '_conn'
-# untuk memberi tahu @st.cache_resource agar mengabaikan argumen ini.
-@st.cache_resource(show_spinner="Menyiapkan database watchlist...")
-def _setup_watchlist_database(_conn): # <--- PERBAIKAN DI SINI
-    """Membuat tabel 'watchlist' jika belum ada."""
-    with _conn.session as s: # <--- DAN DI SINI
+# --- FUNGSI HELPER BARU V4.0 ---
+# SATU FUNGSI UNTUK MENGATUR SEMUANYA
+@st.cache_resource(show_spinner="Menghubungkan ke database watchlist...")
+def get_watchlist_connection():
+    """
+    Membuat koneksi ke DB dan setup tabel watchlist.
+    Ini akan di-cache dan hanya berjalan sekali.
+    """
+    conn = st.connection("supabase_db", type="sql")
+    
+    with conn.session as s:
         s.execute(st.text("""
             CREATE TABLE IF NOT EXISTS watchlist (
                 id SERIAL PRIMARY KEY,
@@ -17,41 +21,35 @@ def _setup_watchlist_database(_conn): # <--- PERBAIKAN DI SINI
             );
         """))
         s.commit()
+    return conn
 # -------------------------------------
 
 class WatchlistTracker:
     
-    # KUNCI BARU: Nama koneksi di Streamlit Secrets
-    DB_CONNECTION_NAME = "supabase_db"
-
     def __init__(self):
         """
-        Versi 3.2: Memperbaiki bug cache decorator V3.1.
+        Versi 4.0: Menggunakan fungsi koneksi global (get_watchlist_connection)
+        untuk menghindari bug __init__ dan cache.
         """
         try:
-            # 1. Buat koneksi
-            conn = st.connection(self.DB_CONNECTION_NAME, type="sql")
-            
-            # 2. Panggil helper setup (eksternal)
-            # Panggilan ini tetap 'conn', definisinya yang berubah
-            _setup_watchlist_database(conn) 
-            
-            # 3. Simpan koneksi di instance
-            self.conn = conn
+            # 1. Panggil fungsi global yang di-cache
+            self.conn = get_watchlist_connection()
             
         except Exception as e:
+            # Error sekarang akan ditangkap di sini jika koneksi gagal
             st.error(f"FATAL: Gagal terhubung ke database Watchlist. Cek 'Secrets' Anda. Error: {e}")
             st.stop()
             
     @st.cache_data(ttl=60, show_spinner="Mengambil data watchlist...")
     def get_watchlist(self) -> list:
         """Mengambil daftar ticker dari database."""
+        # Fungsi ini tidak perlu diubah
         df = self.conn.query("SELECT symbol FROM watchlist ORDER BY symbol ASC;")
-        # Konversi DataFrame kolom ke list
         return df['symbol'].tolist()
 
     def add_to_watchlist(self, symbol: str):
         """Menambahkan ticker baru ke database."""
+        # Fungsi ini tidak perlu diubah
         symbol = symbol.upper()
         if not symbol:
             st.toast("⚠️ Simbol tidak boleh kosong.")
@@ -67,13 +65,13 @@ class WatchlistTracker:
             st.rerun()
             
         except IntegrityError:
-            # Ini terjadi jika 'UNIQUE' constraint gagal (data sudah ada)
             st.toast(f"⚠️ {symbol} sudah ada di Watchlist.")
         except Exception as e:
             st.error(f"Gagal menambahkan {symbol}: {e}")
         
     def remove_from_watchlist(self, symbol: str):
         """Menghapus ticker dari database."""
+        # Fungsi ini tidak perlu diubah
         symbol = symbol.upper()
         with self.conn.session as s:
             s.execute(st.text("DELETE FROM watchlist WHERE symbol = :symbol;"), 
