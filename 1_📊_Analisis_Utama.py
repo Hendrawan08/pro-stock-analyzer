@@ -5,7 +5,6 @@ import time
 import numpy as np
 import plotly.graph_objects as go
 from typing import List, Tuple, Optional 
-import yfinance as yf # <-- PERBAIKAN V6.0 (Dibutuhkan untuk fetch_current_prices)
 
 # --- Impor Standar ---
 from data.data_manager import DataManager
@@ -81,85 +80,14 @@ st.markdown(
 )
 
 # ==========================================================
-# FUNGSI HELPER
+# UPGRADE V2.1.1: Fungsi Helper untuk Ticker
 # ==========================================================
-
 def _normalize_ticker(ticker: str) -> str:
     """Memastikan ticker dalam format uppercase dan diakhiri .JK"""
     ticker = ticker.upper().strip()
     if ticker and not ticker.endswith(".JK"):
         ticker += ".JK"
     return ticker
-
-# --- PERBAIKAN V6.0 (Bug 1): Inisialisasi Database yang Di-cache ---
-@st.cache_resource(show_spinner="Menyiapkan koneksi Watchlist...")
-def get_wt_connection() -> WatchlistTracker:
-    """Inisialisasi WatchlistTracker sekali saja."""
-    try:
-        return WatchlistTracker()
-    except Exception as e:
-        st.error(f"FATAL: Gagal koneksi Watchlist. Cek 'Secrets'. Error: {e}")
-        st.stop()
-
-@st.cache_resource(show_spinner="Menyiapkan koneksi Portofolio...")
-def get_pt_connection() -> PortfolioTracker:
-    """Inisialisasi PortfolioTracker sekali saja."""
-    try:
-        return PortfolioTracker()
-    except Exception as e:
-        st.error(f"FATAL: Gagal koneksi Portofolio. Cek 'Secrets'. Error: {e}")
-        st.stop()
-# ------------------------------------------------------------------
-
-# --- PERBAIKAN V6.0 (Bug 2): Fungsi Pengambilan Harga yang Efisien ---
-@st.cache_data(ttl=300, show_spinner="Memuat harga terkini...")
-def fetch_current_prices(tickers: List[str]) -> dict:
-    """
-    Mengambil harga saat ini untuk daftar ticker (Portofolio/Watchlist).
-    Dibuat efisien dengan satu panggilan yf.download().
-    """
-    price_dict = {}
-    if not tickers:
-        return price_dict
-        
-    # Pastikan semua ticker ternormalisasi SEBELUM diunduh
-    normalized_tickers = [_normalize_ticker(t) for t in tickers]
-    
-    try:
-        # Ambil data 2 hari terakhir untuk memastikan kita mendapatkan harga penutupan terakhir
-        data = yf.download(normalized_tickers, period='2d', interval='1d', progress=False)
-        
-        if data.empty:
-            st.warning("Gagal mengunduh data harga terkini (yf.download).")
-            return {ticker: 0.0 for ticker in tickers}
-            
-        # Ambil harga 'Close' terakhir yang valid
-        last_prices = data['Close'].iloc[-1]
-        
-        if isinstance(last_prices, pd.Series):
-            # Jika lebih dari 1 ticker, last_prices adalah Series
-            price_dict_normalized = last_prices.to_dict()
-        else:
-            # Jika hanya 1 ticker, last_prices adalah float
-            price_dict_normalized = {normalized_tickers[0]: last_prices}
-            
-        # Kembalikan ke format ticker asli (tanpa .JK) jika perlu,
-        # tapi karena kita konsisten pakai .JK, kita map balik
-        
-        # Buat dictionary final, map dari normalized kembali ke original
-        final_price_dict = {}
-        for original_ticker in tickers:
-            norm_t = _normalize_ticker(original_ticker)
-            price = price_dict_normalized.get(norm_t, 0.0)
-            final_price_dict[original_ticker] = 0.0 if pd.isna(price) else price
-
-        return final_price_dict
-        
-    except Exception as e:
-        st.warning(f"Gagal mengambil beberapa harga terkini: {e}")
-        return {ticker: 0.0 for ticker in tickers}
-# ------------------------------------------------------------------
-
 
 # ==========================================================
 # FUNGSI UTAMA ANALISIS
@@ -177,16 +105,14 @@ def run_analysis(
 ):
 
     # --- VALIDASI INPUT ---
+    # (Validasi dasar, normalisasi sudah di sidebar)
     if len(ticker) < 6: # BBCA.JK = 7
         st.error("⚠️ Simbol Ticker tidak valid. Mohon masukkan Simbol Saham yang benar (misalnya: BBCA, GOTO, TLKM).")
         return
 
-    # Panggil fungsi analisis utama dari analysis.analyzer
     analyzed_data = fetch_and_analyze_data(ticker, period, interval)
     
-    if analyzed_data is None: 
-        # fetch_and_analyze_data sudah menampilkan st.error
-        return
+    if analyzed_data is None: return
     if analyzed_data.empty or len(analyzed_data) < 20: 
         st.warning("Data terlalu sedikit setelah perhitungan indikator. Coba periode yang lebih panjang (Minimal 20 hari/periode).")
         return
@@ -220,6 +146,7 @@ def run_analysis(
             """
         )
 
+    # --- UPGRADE V2.1: 3 Kartu Utama (Mobile-Friendly) ---
     col1, col2, col3 = st.columns(3)
     prev_data = analyzed_data.iloc[-2]
 
@@ -261,6 +188,7 @@ def run_analysis(
                 cross_delta_color = "off"
             st.metric(label="MACD vs Signal", value=current_macd_status, delta=cross_delta, delta_color=cross_delta_color)
 
+    # --- Kartu Tambahan (MA & ML) disembunyikan di expander ---
     with st.expander("Info Tambahan (Tren Jangka Panjang & Prediksi ML)"):
         col4, col5 = st.columns(2)
         # CARD 4: TREN MA KUAT
@@ -280,6 +208,7 @@ def run_analysis(
                 st.metric(label=f"Prediksi ML (Acc: {accuracy*100:.1f}%)", value=ml_pred, delta=pred_delta, delta_color=pred_delta_color)
 
 
+    # --- UPGRADE V2.1: MTA (Mobile-Friendly Cards) ---
     st.markdown("### 🕒 Ringkasan Analisis Multi-Timeframe (MTA)")
     mta_timeframes = {
         "15 Menit": ("1mo", "15m"), "1 Jam": ("3mo", "1h"),
@@ -288,8 +217,7 @@ def run_analysis(
     mta_results = []
     
     for tf_label, (tf_period, tf_interval) in mta_timeframes.items():
-        # Gunakan fungsi yang sama, tapi pastikan ticker sudah normalisasi
-        mta_data = fetch_and_analyze_data(ticker, tf_period, tf_interval) 
+        mta_data = fetch_and_analyze_data(ticker, tf_period, tf_interval)
         if mta_data is None or len(mta_data) < 2:
             mta_results.append({"Timeframe": tf_label, "Status RSI": "N/A", "Status MACD": "N/A"})
             continue
@@ -303,7 +231,7 @@ def run_analysis(
         elif last['MACD'] > last['MACD_Signal']: macd_status = "🟢 BUY (Tren Naik)"
         else: macd_status = "🔴 SELL (Tren Turun)"
         
-        mta_results.append({"Timefame": tf_label, "Status RSI": rsi_status, "Status MACD": macd_status})
+        mta_results.append({"Timeframe": tf_label, "Status RSI": rsi_status, "Status MACD": macd_status})
 
     for row in mta_results:
         with st.container(border=True):
@@ -321,6 +249,7 @@ def run_analysis(
             """
         )
 
+    # --- Grafik Interaktif (TABS) ---
     st.markdown("---")
     
     tab_harga, tab_indikator, tab_portfolio, tab_watchlist = st.tabs([
@@ -338,15 +267,16 @@ def run_analysis(
         fig_indicators = plotter.plot_indicators_chart(analyzed_data)
         st.plotly_chart(fig_indicators, use_container_width=True, key=f"indicators_{str(time.time())}")
 
+    # --- UPGRADE V2.1: Portofolio (Mobile-Friendly Cards) ---
     with tab_portfolio:
         st.subheader("Ringkasan Portofolio Saya")
-        holdings = pt.get_holdings() # Ambil data terbaru
+        holdings = pt.get_holdings()
         if not holdings:
             st.info("Portofolio Anda masih kosong. Silakan tambah saham pada menu di sidebar (kiri).")
         else:
-            # Gunakan current_price_dict yang sudah di-pass
             df_portfolio, totals = pt.calculate_portfolio_metrics(holdings, current_price_dict)
             
+            # Tampilkan Total (Ringkasan)
             col_metrics, col_pie = st.columns([1, 2])
             with col_metrics:
                 st.metric("Total Biaya Beli", f"Rp {totals['cost']:,.0f}")
@@ -367,10 +297,13 @@ def run_analysis(
             st.markdown("---")
             st.subheader("Detail Saham (Mobile-Friendly)")
 
+            # Tampilan 'Result Card' (Mobile-Friendly)
             for index, row in df_portfolio.iterrows():
                 with st.container(border=True):
                     st.subheader(f"{row['symbol']}")
+                    
                     pnl_color = "normal" if row['PnL (Rp)'] > 0 else "inverse" if row['PnL (Rp)'] < 0 else "off"
+                    
                     col1, col2 = st.columns(2)
                     col1.metric("Nilai Kini (Value)", f"Rp {row['Value']:,.0f}")
                     col2.metric("Profit/Loss (Rp)", f"Rp {row['PnL (Rp)']:,.0f}", 
@@ -378,32 +311,27 @@ def run_analysis(
 
                     with st.expander("Tampilkan Detail Transaksi"):
                         c1, c2, c3 = st.columns(3)
+                        # UPGRADE V2.1.1: Tampilkan dalam Lot
                         c1.metric("Jumlah", f"{(row['quantity'] / 100):.0f} Lot")
                         c2.metric("Harga Beli Rata-Rata", f"Rp {row['buy_price']:,.0f}")
                         c3.metric("Harga Saat Ini", f"Rp {row['Current Price']:,.0f}")
                         st.write(f"**Total Biaya Beli (Initial Cost):** Rp {row['Initial Cost']:,.0f}")
 
+    # --- UPGRADE V2.1: Watchlist (Mobile-Friendly Cards) ---
     with tab_watchlist:
         st.subheader("Watchlist Saya (Mini-Dashboard)")
         if not watchlist:
             st.info("Watchlist Anda masih kosong. Silakan tambah saham pada menu di sidebar (kiri).")
         else:
-            # --- PERBAIKAN V6.0 (Bug 3): Perbaikan Performa Watchlist ---
-            st.info(f"Memindai {len(watchlist)} saham (data harian)...")
-            # -----------------------------------------------------------
-            
+            st.info(f"Memindai {len(watchlist)} saham di watchlist Anda menggunakan periode data yang sama...")
             results_list = []
             progress_bar = st.progress(0, text="Memulai pemindaian Watchlist...")
             
             for i, wl_ticker in enumerate(watchlist):
                 progress_bar.progress((i + 1) / len(watchlist), text=f"Menganalisis: {wl_ticker}")
+                data = fetch_and_analyze_data(wl_ticker, period, interval)
                 
-                # --- PERBAIKAN V6.0 (Bug 3): Kunci ke data Harian (Daily) ---
-                # Mengabaikan 'period' dan 'interval' dari sidebar
-                # Ini MENCEGAH crash/timeout jika user memilih interval "1m"
-                data = fetch_and_analyze_data(wl_ticker, "3mo", "1d") 
-                # -----------------------------------------------------------
-                
+                # PERBAIKAN BUG V2.1 (Sudah ada)
                 if data is None or len(data) < 2:
                     results_list.append({"Saham": wl_ticker, "Harga Terkini": "N/A", "Perubahan %": "N/A", 
                                          "Status RSI": "N/A", "Status MACD": "Data Error", "Perubahan % (raw)": 0})
@@ -428,6 +356,7 @@ def run_analysis(
             progress_bar.empty()
             df_watchlist = pd.DataFrame(results_list)
 
+            # Tampilan 'Result Card' (Mobile-Friendly)
             for index, row in df_watchlist.iterrows():
                 with st.container(border=True):
                     st.subheader(f"{row['Saham']}")
@@ -437,6 +366,7 @@ def run_analysis(
                     col1.markdown(f"**RSI:** {row['Status RSI']}")
                     col2.markdown(f"**MACD:** {row['Status MACD']}")
 
+    # --- Panel Sinyal & Backtesting ---
     st.markdown("---")
     col_signal, col_backtest = st.columns([2, 1])
     with col_signal:
@@ -500,7 +430,7 @@ def run_analysis(
 
 
 # ==========================================================
-# 5. SIDEBAR
+# 5. SIDEBAR (Konten di-upgrade untuk V2.1.1)
 # ==========================================================
 period_interval_map = {
     "1 Hari": ("2d", "1m"), "1 Minggu": ("1mo", "15m"), 
@@ -511,6 +441,7 @@ with st.sidebar:
     st.header("⚙️ Pengaturan Analisis Saham")
     st.subheader("Data Input")
     
+    # UPGRADE V2.1.1: Ambil input mentah
     selected_ticker_input = st.text_input("Simbol Saham (cth: BBCA)", TICKER_DEFAULT)
     
     selected_period_label = st.selectbox("Periode Data", options=list(period_interval_map.keys()), index=3)
@@ -519,96 +450,95 @@ with st.sidebar:
     st.markdown("---")
     
     st.subheader("👀 Watchlist Saya")
-    
-    # --- PERBAIKAN V6.0 (Bug 1): Panggil helper cache ---
-    wt = get_wt_connection()
-    # ------------------------------------------------
-    
-    watchlist_tickers = wt.get_watchlist() # Ambil data terbaru
-    
+    wt = WatchlistTracker()
+    watchlist_tickers = wt.get_watchlist()
     with st.form("tambah_watchlist"):
+        # UPGRADE V2.1.1: Ambil input mentah
         wl_symbol_input = st.text_input("Simbol Saham", key="wl_add_sym")
         if st.form_submit_button("Tambah ke Watchlist"):
-            wl_symbol = _normalize_ticker(wl_symbol_input)
-            wt.add_to_watchlist(wl_symbol) # V4.3 sudah punya st.rerun()
-            
+            wl_symbol = _normalize_ticker(wl_symbol_input) # Normalisasi di sini
+            wt.add_to_watchlist(wl_symbol)
     if watchlist_tickers:
         selected_wl_ticker = st.selectbox("Pilih Saham untuk Dihapus", options=watchlist_tickers)
         if st.button("Hapus dari Watchlist", key="wl_remove_btn"):
-            wt.remove_from_watchlist(selected_wl_ticker) # V4.3 sudah punya st.rerun()
+            wt.remove_from_watchlist(selected_wl_ticker)
     st.markdown("---")
 
     st.subheader("💼 Portofolio Tracker")
-    
-    # --- PERBAIKAN V6.0 (Bug 1): Panggil helper cache ---
-    pt = get_pt_connection()
-    # ------------------------------------------------
-    
+    pt = PortfolioTracker()
     with st.form("tambah_portofolio"):
         st.write("Tambah Saham Baru")
+        # UPGRADE V2.1.1: Ambil input mentah
         port_symbol_input = st.text_input("Simbol", key="p_sym")
         port_price = st.number_input("Harga Beli", min_value=1.0, step=1.0, key="p_price")
+        # UPGRADE V2.1.1: Ubah label ke 'Lot'
         port_qty_lots = st.number_input("Jumlah Lot", min_value=1, step=1, key="p_qty", format="%i")
         
         submitted = st.form_submit_button("Tambah Saham")
         if submitted and port_symbol_input and port_price and port_qty_lots:
+            # Normalisasi ticker dan konversi Lot ke Lembar
             port_symbol = _normalize_ticker(port_symbol_input)
             port_qty_lembar = port_qty_lots * 100
             pt.add_holding(port_symbol, port_price, port_qty_lembar)
             st.rerun() 
 
-    holdings = pt.get_holdings() # Ambil data terbaru
-    
+    holdings = pt.get_holdings()
     if holdings:
         st.markdown("---")
         st.write("Edit/Hapus Saham")
+        # UPGRADE V2.1.1: Tampilkan dalam Lot
         holding_options = [f"{i}: {h['symbol']} ({(h['quantity'] / 100):.0f} Lot @ Rp{h['buy_price']:,.0f})" for i, h in enumerate(holdings)]
         
         default_index = 0
         selected_index_str = st.selectbox("Pilih Saham", options=holding_options, index=default_index, key="select_edit_delete")
-        
-        if holding_options and selected_index_str: # Pastikan tidak kosong
+        if holding_options:
             selected_index = int(selected_index_str.split(':')[0])
-            
-            # Pastikan selected_index masih valid (tidak error jika item baru dihapus)
-            if selected_index < len(holdings):
-                selected_holding = holdings[selected_index]
-                col_edit_form1, col_edit_form2 = st.columns(2)
-                
-                with col_edit_form2:
-                    if st.button("Hapus", key="delete_holding"):
-                        pt.remove_holding(selected_index)
-                        st.toast(f"Berhasil menghapus {selected_holding['symbol']}.")
+            selected_holding = holdings[selected_index]
+            col_edit_form1, col_edit_form2 = st.columns(2)
+            with col_edit_form2:
+                if st.button("Hapus", key="delete_holding"):
+                    pt.remove_holding(selected_index)
+                    st.toast(f"Berhasil menghapus {selected_holding['symbol']}.")
+                    st.rerun() 
+            with col_edit_form1:
+                with st.form("edit_portofolio"):
+                    st.write(f"Edit {selected_holding['symbol']}")
+                    # UPGRADE V2.1.1: Ambil input mentah
+                    edit_symbol_input = st.text_input("Simbol Baru", value=selected_holding['symbol'].replace(".JK", ""), key="e_sym")
+                    edit_price = st.number_input("Harga Beli Baru", min_value=1.0, step=1.0, value=selected_holding['buy_price'], key="e_price")
+                    # UPGRADE V2.1.1: Tampilkan dan ambil input dalam Lot
+                    edit_qty_lots = st.number_input("Jumlah Lot Baru", min_value=1, step=1, value=int(selected_holding['quantity'] / 100), key="e_qty", format="%i")
+                    
+                    edit_submitted = st.form_submit_button("Simpan Perubahan")
+                    if edit_submitted:
+                        # Normalisasi ticker dan konversi Lot ke Lembar
+                        edit_symbol = _normalize_ticker(edit_symbol_input)
+                        edit_qty_lembar = edit_qty_lots * 100
+                        pt.update_holding(selected_index, edit_symbol, edit_price, edit_qty_lembar)
+                        st.success(f"Berhasil memperbarui {edit_symbol}.")
                         st.rerun() 
-                        
-                with col_edit_form1:
-                    with st.form("edit_portofolio"):
-                        st.write(f"Edit {selected_holding['symbol']}")
-                        edit_symbol_input = st.text_input("Simbol Baru", value=selected_holding['symbol'].replace(".JK", ""), key="e_sym")
-                        edit_price = st.number_input("Harga Beli Baru", min_value=1.0, step=1.0, value=selected_holding['buy_price'], key="e_price")
-                        edit_qty_lots = st.number_input("Jumlah Lot Baru", min_value=1, step=1, value=int(selected_holding['quantity'] / 100), key="e_qty", format="%i")
-                        
-                        edit_submitted = st.form_submit_button("Simpan Perubahan")
-                        if edit_submitted:
-                            edit_symbol = _normalize_ticker(edit_symbol_input)
-                            edit_qty_lembar = edit_qty_lots * 100
-                            pt.update_holding(selected_index, edit_symbol, edit_price, edit_qty_lembar)
-                            st.success(f"Berhasil memperbarui {edit_symbol}.")
-                            st.rerun() 
-            else:
-                # Ini terjadi jika item terakhir dihapus dan selectbox belum update
-                st.warning("Item tidak lagi tersedia, me-refresh...")
-                st.rerun()
         else:
-            pass # Tidak ada holding yang dipilih
+            pass
 
-    # --- PERBAIKAN V6.0 (Bug 2): Panggil fungsi fetch_current_prices yang baru & efisien ---
+    @st.cache_data(ttl=300)
+    def fetch_current_prices(tickers):
+        data_manager_sidebar = DataManager(None, None, None)
+        price_dict = {}
+        for t in tickers:
+            try:
+                # Pastikan ticker yang dikirim ke fetch sudah ternormalisasi
+                normalized_t = _normalize_ticker(t)
+                temp_data = data_manager_sidebar.fetch_data(normalized_t, "1d", "1d") 
+                if temp_data is not None and 'Close' in temp_data.columns and not temp_data.empty:
+                    price_dict[t] = temp_data.iloc[-1]['Close']
+                else: price_dict[t] = 0.0
+            except Exception: price_dict[t] = 0.0
+        return price_dict
+
     tickers_in_portfolio = list(set(h['symbol'] for h in holdings))
     current_price_dict = {}
     if tickers_in_portfolio:
-        # Gunakan fungsi V6.0 yang baru
         current_price_dict = fetch_current_prices(tickers_in_portfolio)
-    # ---------------------------------------------------------------------------------
     
     st.markdown("---")
     st.subheader("Pembaruan & Notifikasi")
@@ -620,6 +550,9 @@ with st.sidebar:
 
     st.sidebar.markdown("---")
     st.sidebar.caption("© 2025 Dibuat oleh Hendrawan Lotanto.")
+    # ==========================================================
+    # UPGRADE V3.0: Update Versi
+    # ==========================================================
     st.sidebar.caption("Versi 3.0.0 (Database Permanen)")
 
 
@@ -627,22 +560,23 @@ with st.sidebar:
 # 6. RUN APLIKASI UTAMA
 # ==========================================================
 
+# UPGRADE V2.1.1: Normalisasi ticker input utama sebelum di-pass
 selected_ticker = _normalize_ticker(selected_ticker_input)
 
 if selected_ticker:
     start_time = time.time() 
     st.info(f"⏳ Menganalisis {selected_ticker}...")
     
-    # Panggil fungsi utama, sekarang 'pt' dan 'wt' di-pass dengan benar
     run_analysis(
         selected_ticker, selected_period, selected_interval, None,
-        current_price_dict, watchlist_tickers, pt, wt 
+        current_price_dict, wt.get_watchlist(), pt, wt 
     )
     
     end_time = time.time()
     st.sidebar.markdown(f"---")
     st.sidebar.success(f"Analisis Selesai dalam **{end_time - start_time:.2f} detik**.")
 
+# Tambahkan else untuk Tampilan Awal
 else:
     st.info("Silakan masukkan Simbol Saham di sidebar (kiri) untuk memulai analisis.")
 
