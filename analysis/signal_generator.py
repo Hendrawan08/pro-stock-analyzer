@@ -1,4 +1,3 @@
-# analysis/signal_generator.py
 import pandas as pd
 from typing import List, Tuple
 from constants import *
@@ -13,8 +12,10 @@ class SignalGenerator:
         # Logika Notifikasi (tidak diubah)
         pass
 
-    # PERUBAHAN: Fungsi ini sekarang mengembalikan 3 hal
-    def generate(self, data: pd.DataFrame, ticker: str) -> Tuple[List[str], List[str], pd.Series]:
+    # ==========================================================
+    # PERBAIKAN: Tambahkan 'interval: str' sebagai argumen
+    # ==========================================================
+    def generate(self, data: pd.DataFrame, ticker: str, interval: str) -> Tuple[List[str], List[str], pd.Series]:
         """
         Menghasilkan sinyal dan ringkasan tren, 
         dipisahkan menjadi Sinyal Aksi dan Konteks Tren.
@@ -67,6 +68,7 @@ class SignalGenerator:
             trend_signals.append("🌊 Susunan MA tidak teratur → Tren **Sideways**.")
 
         # --- 5. Analisis Pola (Terbaru) ---
+        # (Logika "pintar" ada di 'patterns.py', jadi kita tidak perlu 'if interval' di sini)
         if last["DB_Signal"]:
             action_signals.append("🟢 Pola **Double Bottom** terdeteksi → Potensi Reversal Naik.")
             is_buy_signal = True

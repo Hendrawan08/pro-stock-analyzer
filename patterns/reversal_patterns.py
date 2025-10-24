@@ -21,11 +21,11 @@ class ReversalPatterns:
         n = len(close_values)
         
         # ==========================================================
-        # PERBAIKAN: LOGIKA PARAMETER DINAMIS (LEBIH SENSITIF)
+        # LOGIKA PARAMETER DINAMIS (PINTAR)
         # ==========================================================
         if interval == "1m":
             # Paling sensitif untuk 1 Menit
-            distance = 240          # 4 jam trading
+            distance = 240          # 4 jam trading (240 bar)
             threshold = 0.0025      # 0.25% (sebelumnya 0.5%)
             reversal_factor = 0.004 # 0.4% (sebelumnya 0.7%)
         elif interval == "15m":
@@ -87,4 +87,4 @@ class ReversalPatterns:
                 if is_similar_top and has_reversal_top and is_local_max:
                     data.loc[data.index[i], "DT_Signal"] = True
                         
-        return data
+        return data # <-- PERBAIKAN: Menghapus tanda kurung ')' ekstra

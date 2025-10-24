@@ -4,138 +4,106 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 import streamlit as st
-import joblib # Perlu untuk save/load model
-import os # Perlu untuk mengecek apakah file ada
+# HAPUS: joblib, os, dan semua impor indikator (tidak diperlukan lagi)
 
-# --- Import semua yang dibutuhkan untuk PELATIHAN ---
-# Ini diperlukan agar kita bisa melatih model di dalam file ini
-from data.data_manager import DataManager
-from indicators.moving_average import MovingAverage
-from indicators.rsi import RSI
-from indicators.macd import MACD
-from indicators.bollinger_bands import BollingerBands
-from indicators.stochastic import Stochastic
-# (Kita tidak perlu ReversalPatterns untuk fitur ML)
+# Fitur tetap sama, karena analyzer.py sudah menyiapkannya
+FEATURES = ['RSI', 'MACD', 'MACD_Signal', 'MA_S', 'MA_L', 'BB_Upper', 'BB_Lower', '%K', '%D'] 
 
-MODEL_PATH = 'machine_learning/saved_model.joblib'
-ACCURACY_PATH = 'machine_learning/model_accuracy.txt'
-FEATURES = ['RSI', 'MACD', 'MACD_Signal', 'MA_S', 'MA_L', 'BB_Upper', 'BB_Lower', '%K', '%D'] # Menambahkan %K dan %D
+# ==========================================================
+# FUNGSI BARU V2.1: PELATIHAN DINAMIS PER SAHAM
+# ==========================================================
+@st.cache_data(show_spinner=False)
+def _train_model_dynamically(data: pd.DataFrame) -> tuple[RandomForestClassifier | None, float]:
+    """
+    Melatih model baru secara dinamis HANYA PADA DATA SAHAM INI.
+    Hasilnya (model & akurasi) akan di-cache oleh Streamlit.
+    Fungsi ini akan dipanggil oleh MLPredictor.
+    """
+    try:
+        # 1. Siapkan Fitur (X) dan Target (y)
+        # Kita gunakan data yang sudah dihitung indikatornya
+        df = data.copy().dropna(subset=FEATURES) 
+        
+        # Target: Harga Close besok lebih tinggi dari harga Close hari ini
+        df['Target'] = (df['Close'].shift(-1) > df['Close']).astype(int)
+        df.dropna(inplace=True) # Hapus baris terakhir (Target=NaN)
 
-# Fungsi ini akan melatih model DARI AWAL
-# Ini akan dipanggil HANYA JIKA file model tidak ada
-def _train_new_model():
-    """Melatih model baru dari data 10 tahun ^JKSE dan menyimpannya."""
-    st.info("Membuat model Machine Learning baru. Ini hanya berjalan sekali dan mungkin perlu waktu...")
-    
-    # 1. Ambil data 10 TAHUN untuk pelatihan (menggunakan ^JKSE sebagai proxy)
-    data_manager = DataManager(None, None, None)
-    # Ambil data 10 tahun, interval 1 hari
-    train_data = data_manager.fetch_data("^JKSE", "10y", "1d")
-    
-    if train_data is None:
-        st.error("Gagal mengambil data pelatihan untuk ML. Model tidak akan bekerja.")
+        if df.empty:
+            return None, 0.0
+
+        X = df[FEATURES]
+        y = df['Target']
+
+        # 2. Latih Model
+        # Kita pakai 80% data untuk train, 20% untuk test
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+        
+        if len(X_train) < 50: # Butuh data yang cukup
+            print(f"Peringatan ML: Data pelatihan terlalu sedikit ({len(X_train)} baris).")
+            return None, 0.0
+
+        model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+        model.fit(X_train, y_train)
+
+        # 3. Evaluasi dan dapatkan akurasi
+        y_pred = model.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        
+        return model, accuracy
+        
+    except Exception as e:
+        print(f"Error saat melatih ML: {e}") # Log ke console, jangan ke UI
         return None, 0.0
 
-    # 2. Hitung semua indikator untuk data pelatihan
-    train_data = MovingAverage().calculate(train_data)
-    train_data = RSI().calculate(train_data)
-    train_data = MACD().calculate(train_data)
-    train_data = BollingerBands().calculate(train_data)
-    train_data = Stochastic().calculate(train_data)
-    
-    # 3. Siapkan Fitur (X) dan Target (y)
-    df = train_data.copy().dropna()
-    # Target: Harga Close besok lebih tinggi dari harga Close hari ini
-    df['Target'] = (df['Close'].shift(-1) > df['Close']).astype(int)
-    df.dropna(inplace=True) # Hapus baris terakhir (Target=NaN)
 
-    X = df[FEATURES]
-    y = df['Target']
-
-    # 4. Latih Model
-    # Kita pakai 80% data untuk train, 20% untuk test
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
-    
-    if len(X_train) < 100:
-         st.error("Data pelatihan tidak cukup setelah diproses. Model ML gagal.")
-         return None, 0.0
-
-    model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-    model.fit(X_train, y_train)
-
-    # 5. Evaluasi dan simpan akurasi
-    y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    
-    # 6. Simpan model ke file
-    joblib.dump(model, MODEL_PATH)
-    # Simpan akurasi juga agar tidak perlu dihitung ulang
-    with open(ACCURACY_PATH, 'w') as f:
-        f.write(str(accuracy))
-    
-    st.success(f"Model ML baru berhasil dibuat! (Akurasi: {accuracy*100:.1f}%)")
-    
-    return model, accuracy
-
-# Gunakan cache_resource untuk memuat model HANYA SEKALI saat app start
-@st.cache_resource
-def load_model_and_accuracy():
-    """
-    Memuat model dari file. Jika file tidak ada,
-    fungsi _train_new_model akan dipanggil.
-    """
-    if not os.path.exists(MODEL_PATH):
-        # File model tidak ada, latih yang baru
-        model, accuracy = _train_new_model()
-    else:
-        # File model SUDAH ADA, tinggal load
-        model = joblib.load(MODEL_PATH)
-        # Load akurasi dari file
-        try:
-            with open(ACCURACY_PATH, 'r') as f:
-                accuracy = float(f.read())
-        except FileNotFoundError:
-            # Jika file akurasi terhapus, kita latih ulang saja
-            st.warning("File akurasi tidak ditemukan. Melatih ulang model...")
-            model, accuracy = _train_new_model()
-
-    return model, accuracy
-
-
+# ==========================================================
+# KELAS PREDICTOR BARU (LEBIH SEDERHANA)
+# ==========================================================
 class MLPredictor:
     """
-    Versi BARU: Memuat model yang sudah ada, tidak melatih ulang.
+    Versi BARU (V2.1):
+    Melatih model secara dinamis untuk SETIAP saham.
+    Tidak ada lagi cache file global.
     """
     
     def __init__(self):
-        # Saat kelas diinisialisasi, panggil fungsi cache untuk memuat model
-        self.model, self.accuracy = load_model_and_accuracy()
+        # Kosong, tidak ada model yang di-load
+        pass
 
     def predict(self, data: pd.DataFrame) -> tuple[float, str]:
         """
-        Fungsi BARU: Hanya untuk PREDIKSI.
-        Tidak ada lagi pelatihan di sini.
+        Fungsi BARU: 
+        1. Memanggil fungsi training yang di-cache (_train_model_dynamically).
+        2. Melakukan prediksi pada baris terakhir.
         """
         
-        if self.model is None:
-            return 0.0, "Model ML tidak ter-load."
+        # 1. Dapatkan model & akurasi (akan di-cache per saham)
+        # Ini akan instan jika 'data' tidak berubah (karena cache di app.py)
+        model, accuracy = _train_model_dynamically(data)
+        
+        if model is None:
+            return accuracy, "Data N/A" # 'accuracy' akan 0.0
 
-        # Ambil data baris TERAKHIR dari data yang sudah dianalisis
-        # Pastikan semua fitur ada
+        # 2. Ambil data baris TERAKHIR untuk prediksi
         try:
             last_features_df = data.iloc[-1:]
+            
+            # Cek jika ada NaN di baris terakhir (bisa terjadi di data live)
+            if last_features_df[FEATURES].isnull().values.any():
+                return accuracy, "Data N/A"
+                
             X_pred = last_features_df[FEATURES]
+        
         except KeyError as e:
-            st.error(f"Error fitur ML: Kolom {e} tidak ditemukan. Model mungkin tidak akurat.")
-            return self.accuracy, "Error"
+            print(f"Error fitur ML: Kolom {e} tidak ditemukan.")
+            return accuracy, "Error"
         except Exception as e:
-            st.error(f"Error saat menyiapkan data prediksi ML: {e}")
-            return self.accuracy, "Error"
+            print(f"Error saat menyiapkan data prediksi ML: {e}")
+            return accuracy, "Error"
 
-        # Prediksi Hari Berikutnya
-        prediction = self.model.predict(X_pred)[0]
-
+        # 3. Prediksi Hari Berikutnya
+        prediction = model.predict(X_pred)[0]
         pred_str = "NAIK (BUY)" if prediction == 1 else "TURUN (SELL)"
         
-        # Kembalikan akurasi yang sudah tersimpan
-        return self.accuracy, pred_str
+        # Kembalikan akurasi DINAMIS yang baru dihitung
+        return accuracy, pred_str
