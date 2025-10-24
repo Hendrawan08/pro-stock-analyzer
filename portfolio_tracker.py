@@ -154,6 +154,6 @@ class PortfolioTracker:
             df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
 
             st.session_state[self.PORTFOLIO_KEY] = df.to_dict('records')
-            st.info("📂 Data portofolio berhasil dimuat dari Excel.")
+            st.toast("📂 Data portofolio berhasil dimuat dari Excel.")
         except Exception as e:
             st.toast(f"❌ Gagal membaca file Excel: {e}")
