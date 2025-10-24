@@ -1,10 +1,11 @@
 # watchlist_tracker.py
 import streamlit as st
 import pandas as pd
-from sqlalchemy.exc import IntegrityError # Untuk mendeteksi duplikat
+# --- PERBAIKAN V4.3: Impor 'text' dari sqlalchemy ---
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text 
 
-# --- FUNGSI HELPER BARU V4.1 ---
-# FUNGSI INI SEKARANG HANYA MENGHUBUNGKAN, TIDAK MEMBUAT TABEL
+# --- FUNGSI HELPER V4.1 ---
 @st.cache_resource(show_spinner="Menghubungkan ke database watchlist...")
 def get_watchlist_connection():
     """
@@ -15,7 +16,6 @@ def get_watchlist_connection():
         conn = st.connection("supabase_db", type="sql")
         return conn
     except Exception as e:
-        # Jika koneksi gagal, tampilkan error dan hentikan
         st.error(f"FATAL: Gagal terhubung ke database. Cek 'Secrets' Anda. Error: {e}")
         st.stop()
 # -------------------------------------
@@ -23,24 +23,14 @@ def get_watchlist_connection():
 class WatchlistTracker:
     
     def __init__(self):
-        """
-        Versi 4.1: Menggunakan fungsi koneksi global (get_watchlist_connection)
-        """
-        # 1. Panggil fungsi global yang di-cache
         self.conn = get_watchlist_connection()
             
-    # --- PERBAIKAN V4.2 DI SINI ---
     @st.cache_data(ttl=60, show_spinner="Mengambil data watchlist...")
-    def get_watchlist(_self) -> list: # <-- 'self' diubah menjadi '_self'
-        """Mengambil daftar ticker dari database."""
-        # '_self' digunakan untuk mengakses koneksi
+    def get_watchlist(_self) -> list:
         df = _self.conn.query("SELECT symbol FROM watchlist ORDER BY symbol ASC;") 
         return df['symbol'].tolist()
-    # ------------------------------
 
     def add_to_watchlist(self, symbol: str):
-        """Menambahkan ticker baru ke database."""
-        # Fungsi ini tidak di-cache, jadi 'self' tetap aman
         symbol = symbol.upper()
         if not symbol:
             st.toast("⚠️ Simbol tidak boleh kosong.")
@@ -48,10 +38,11 @@ class WatchlistTracker:
 
         try:
             with self.conn.session as s:
-                s.execute(st.text("INSERT INTO watchlist (symbol) VALUES (:symbol);"), 
+                # --- PERBAIKAN V4.3: Menggunakan text() BUKAN st.text() ---
+                s.execute(text("INSERT INTO watchlist (symbol) VALUES (:symbol);"), 
                           params=dict(symbol=symbol))
                 s.commit()
-            self.get_watchlist.clear() # Hapus cache
+            self.get_watchlist.clear()
             st.toast(f"✅ {symbol} ditambahkan ke Watchlist.")
             st.rerun()
             
@@ -61,14 +52,13 @@ class WatchlistTracker:
             st.error(f"Gagal menambahkan {symbol}: {e}")
         
     def remove_from_watchlist(self, symbol: str):
-        """Menghapus ticker dari database."""
-        # Fungsi ini tidak di-cache, jadi 'self' tetap aman
         symbol = symbol.upper()
         with self.conn.session as s:
-            s.execute(st.text("DELETE FROM watchlist WHERE symbol = :symbol;"), 
+            # --- PERBAIKAN V4.3: Menggunakan text() BUKAN st.text() ---
+            s.execute(text("DELETE FROM watchlist WHERE symbol = :symbol;"), 
                       params=dict(symbol=symbol))
             s.commit()
-        self.get_watchlist.clear() # Hapus cache
+        self.get_watchlist.clear()
         st.toast(f"🗑️ {symbol} dihapus dari Watchlist.")
         st.rerun()
-        
+
