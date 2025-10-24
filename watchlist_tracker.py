@@ -1,78 +1,67 @@
 # watchlist_tracker.py
 import streamlit as st
 import pandas as pd
-from sqlalchemy.exc import IntegrityError # Untuk mendeteksi duplikat
+import os
 
 class WatchlistTracker:
     
-    # KUNCI BARU: Nama koneksi di Streamlit Secrets
-    DB_CONNECTION_NAME = "supabase_db"
+    # Kunci session state untuk menyimpan daftar watchlist
+    WATCHLIST_KEY = "stock_watchlist"
+    FILE_PATH = "watchlist_data.xlsx"  # Nama file penyimpanan Excel
 
     def __init__(self):
-        """
-        Versi 3.0: Terhubung ke database SQL (Supabase)
-        bukan lagi st.session_state.
-        """
-        try:
-            # 1. Buat koneksi ke database
-            self.conn = st.connection(self.DB_CONNECTION_NAME, type="sql")
-            
-            # 2. Buat tabel jika belum ada (hanya berjalan sekali)
-            self._setup_database()
-            
-        except Exception as e:
-            st.error(f"FATAL: Gagal terhubung ke database Watchlist. Cek 'Secrets' Anda. Error: {e}")
-            st.stop()
-            
-    @st.cache_resource(show_spinner="Menyiapkan database watchlist...")
-    def _setup_database(_self):
-        """Membuat tabel 'watchlist' jika belum ada."""
-        with _self.conn.session as s:
-            s.execute(st.text("""
-                CREATE TABLE IF NOT EXISTS watchlist (
-                    id SERIAL PRIMARY KEY,
-                    symbol TEXT NOT NULL UNIQUE
-                );
-            """))
-            s.commit()
+        # Inisialisasi watchlist di session state jika belum ada
+        if self.WATCHLIST_KEY not in st.session_state:
+            st.session_state[self.WATCHLIST_KEY] = []
 
-    @st.cache_data(ttl=60, show_spinner="Mengambil data watchlist...")
+    # -----------------------------
+    # 🔹 Fungsi Get / Add / Remove
+    # -----------------------------
     def get_watchlist(self) -> list:
-        """Mengambil daftar ticker dari database."""
-        df = self.conn.query("SELECT symbol FROM watchlist ORDER BY symbol ASC;")
-        # Konversi DataFrame kolom ke list
-        return df['symbol'].tolist()
+        """Mengambil daftar ticker dari session state."""
+        return st.session_state[self.WATCHLIST_KEY]
 
     def add_to_watchlist(self, symbol: str):
-        """Menambahkan ticker baru ke database."""
+        """Menambahkan ticker baru ke watchlist jika belum ada."""
         symbol = symbol.upper()
-        if not symbol:
-            st.toast("⚠️ Simbol tidak boleh kosong.")
-            return
-
-        try:
-            with self.conn.session as s:
-                s.execute(st.text("INSERT INTO watchlist (symbol) VALUES (:symbol);"), 
-                          params=dict(symbol=symbol))
-                s.commit()
-            self.get_watchlist.clear() # Hapus cache
+        current_list = self.get_watchlist()
+        if symbol and symbol not in current_list:
+            st.session_state[self.WATCHLIST_KEY].append(symbol)
+            self.save_to_excel()  # ✅ Simpan otomatis setiap kali nambah
             st.toast(f"✅ {symbol} ditambahkan ke Watchlist.")
             st.rerun()
-            
-        except IntegrityError:
-            # Ini terjadi jika 'UNIQUE' constraint gagal (data sudah ada)
+        elif symbol in current_list:
             st.toast(f"⚠️ {symbol} sudah ada di Watchlist.")
-        except Exception as e:
-            st.error(f"Gagal menambahkan {symbol}: {e}")
         
     def remove_from_watchlist(self, symbol: str):
-        """Menghapus ticker dari database."""
+        """Menghapus ticker dari watchlist."""
         symbol = symbol.upper()
-        with self.conn.session as s:
-            s.execute(st.text("DELETE FROM watchlist WHERE symbol = :symbol;"), 
-                      params=dict(symbol=symbol))
-            s.commit()
-        self.get_watchlist.clear() # Hapus cache
-        st.toast(f"🗑️ {symbol} dihapus dari Watchlist.")
-        st.rerun()
+        current_list = self.get_watchlist()
+        if symbol in current_list:
+            st.session_state[self.WATCHLIST_KEY].remove(symbol)
+            self.save_to_excel()  # ✅ Simpan otomatis setiap kali hapus
+            st.toast(f"🗑️ {symbol} dihapus dari Watchlist.")
+            st.rerun()
 
+    # -----------------------------
+    # 💾 Fungsi Simpan & Muat Excel
+    # -----------------------------
+    def save_to_excel(self):
+        """Menyimpan daftar watchlist ke file Excel."""
+        try:
+            df = pd.DataFrame({"symbol": st.session_state[self.WATCHLIST_KEY]})
+            df.to_excel(self.FILE_PATH, index=False)
+            st.toast("💾 Watchlist berhasil disimpan ke Excel.")
+        except Exception as e:
+            st.error(f"❌ Gagal menyimpan watchlist ke Excel: {e}")
+
+    def load_from_excel(self):
+        """Memuat watchlist dari file Excel jika ada."""
+        if os.path.exists(self.FILE_PATH):
+            try:
+                df = pd.read_excel(self.FILE_PATH)
+                if "symbol" in df.columns:
+                    st.session_state[self.WATCHLIST_KEY] = df["symbol"].tolist()
+                    st.toast("📂 Watchlist berhasil dimuat dari Excel.")
+            except Exception as e:
+                st.error(f"❌ Gagal memuat watchlist dari Excel: {e}")

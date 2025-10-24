@@ -23,6 +23,14 @@ from constants import *
 from portfolio_tracker import PortfolioTracker
 from watchlist_tracker import WatchlistTracker
 
+tracker = PortfolioTracker()
+tracker.load_from_excel()  # ✅ Load otomatis portofolio dari Excel
+holdings = tracker.get_holdings()
+
+watchlist = WatchlistTracker()
+watchlist.load_from_excel()  # ✅ Kalau kamu juga mau watchlist tersimpan
+watchlist_items = watchlist.get_watchlist()
+
 # ==========================================================
 # KONFIGURASI STREAMLIT
 # ==========================================================
@@ -42,38 +50,6 @@ st.markdown(
         /* CSS untuk membuat metric P/L berwarna */
         [data-testid="stMetricDelta"] div { color: inherit !important; }
         [data-testid="stMetricDelta"] svg { fill: currentColor !important; }
-
-        /* ========================================================== */
-        /* UPGRADE V3.0: Tombol Navigasi Premium di Sidebar */
-        /* ========================================================== */
-        
-        /* Target link navigasi di sidebar */
-        [data-testid="stSidebarNav"] ul > li > a {
-            padding: 10px 16px;
-            margin-bottom: 8px; /* Memberi jarak antar tombol */
-            border-radius: 8px; /* Sudut membulat */
-            border: 1px solid rgba(255, 255, 255, 0.1); /* Garis batas tipis */
-            color: #FAFAFA; /* Teks putih cerah */
-            transition: all 0.2s ease-in-out; /* Animasi halus */
-        }
-        
-        /* Saat cursor di atas (hover) */
-        [data-testid="stSidebarNav"] ul > li > a:hover {
-            background-color: rgba(0, 255, 255, 0.1); /* Efek 'glow' cyan */
-            border-color: #00FFFF; /* Garis batas cyan */
-            color: #00FFFF; /* Teks cyan */
-            text-decoration: none;
-        }
-        
-        /* Untuk halaman yang sedang AKTIF */
-        [data-testid="stSidebarNav"] ul > li > a[aria-current="page"] {
-            background-color: #00FFFF; /* Latar belakang cyan solid */
-            color: #1E1E1E; /* Teks gelap agar kontras */
-            font-weight: 600;
-            border-color: #00FFFF;
-        }
-        /* ========================================================== */
-
     </style>
     # 📈 Pro Stock Analyzer: Dashboard Teknikal Interaktif
     """, unsafe_allow_html=True
@@ -152,7 +128,7 @@ def run_analysis(
 
     # CARD 1: HARGA PENUTUP
     with col1:
-        with st.container(border=True):
+        with st.container():
             st.metric(
                 label=f"Harga Penutup", 
                 value=f"Rp {last_data['Close']:,.0f}", 
@@ -161,7 +137,7 @@ def run_analysis(
 
     # CARD 2: RSI
     with col2:
-        with st.container(border=True):
+        with st.container():
             rsi_delta = "Overbought" if last_data['RSI'] > RSI_OVERBOUGHT else "Oversold" if last_data['RSI'] < RSI_OVERSOLD else "Netral"
             rsi_delta_color = "inverse" if last_data['RSI'] > RSI_OVERBOUGHT or last_data['RSI'] < RSI_OVERSOLD else "off"
             st.metric(
@@ -173,7 +149,7 @@ def run_analysis(
 
     # CARD 3: MACD
     with col3:
-        with st.container(border=True):
+        with st.container():
             current_macd_status = "BUY" if last_data['MACD'] > last_data['MACD_Signal'] else "SELL"
             is_cross_up = (last_data['MACD'] > last_data['MACD_Signal']) and (prev_data['MACD'] < prev_data['MACD_Signal'])
             is_cross_down = (last_data['MACD'] < last_data['MACD_Signal']) and (prev_data['MACD'] > prev_data['MACD_Signal'])
@@ -193,7 +169,7 @@ def run_analysis(
         col4, col5 = st.columns(2)
         # CARD 4: TREN MA KUAT
         with col4:
-            with st.container(border=True):
+            with st.container():
                 trend = "Bullish" if last_data['MA_M'] > last_data['MA_L'] else "Bearish" 
                 trend_delta = "Kuat Naik ✨" if trend == "Bullish" else "Kuat Turun 💀"
                 trend_delta_color = "normal" if trend == "Bullish" else "inverse"
@@ -201,7 +177,7 @@ def run_analysis(
 
         # CARD 5: PREDIKSI ML
         with col5:
-            with st.container(border=True):
+            with st.container():
                 accuracy, ml_pred = predictor.predict(analyzed_data) 
                 pred_delta = f"Rekomendasi {ml_pred}"
                 pred_delta_color = "normal" if ml_pred == "BUY" else "inverse" if ml_pred == "SELL" else "off"
@@ -234,7 +210,7 @@ def run_analysis(
         mta_results.append({"Timeframe": tf_label, "Status RSI": rsi_status, "Status MACD": macd_status})
 
     for row in mta_results:
-        with st.container(border=True):
+        with st.container():
             col_tf, col_rsi, col_macd = st.columns([1, 1, 1])
             col_tf.markdown(f"**{row['Timeframe']}**")
             col_rsi.markdown(f"**RSI:** {row['Status RSI']}")
@@ -299,7 +275,7 @@ def run_analysis(
 
             # Tampilan 'Result Card' (Mobile-Friendly)
             for index, row in df_portfolio.iterrows():
-                with st.container(border=True):
+                with st.container():
                     st.subheader(f"{row['symbol']}")
                     
                     pnl_color = "normal" if row['PnL (Rp)'] > 0 else "inverse" if row['PnL (Rp)'] < 0 else "off"
@@ -316,6 +292,14 @@ def run_analysis(
                         c2.metric("Harga Beli Rata-Rata", f"Rp {row['buy_price']:,.0f}")
                         c3.metric("Harga Saat Ini", f"Rp {row['Current Price']:,.0f}")
                         st.write(f"**Total Biaya Beli (Initial Cost):** Rp {row['Initial Cost']:,.0f}")
+
+            # Tombol Simpan Portofolio ke Excel (di dalam tab)
+            col_save_a, col_save_b = st.columns([1, 3])
+            with col_save_a:
+                if st.button("💾 Simpan Portofolio ke Excel"):
+                    pt.save_to_excel(df_portfolio)
+            with col_save_b:
+                st.info("Simpan snapshot portofolio Anda. File: portfolio_data.xlsx (lokal).")
 
     # --- UPGRADE V2.1: Watchlist (Mobile-Friendly Cards) ---
     with tab_watchlist:
@@ -358,13 +342,21 @@ def run_analysis(
 
             # Tampilan 'Result Card' (Mobile-Friendly)
             for index, row in df_watchlist.iterrows():
-                with st.container(border=True):
+                with st.container():
                     st.subheader(f"{row['Saham']}")
                     delta_color = "normal" if row['Perubahan % (raw)'] > 0 else "inverse" if row['Perubahan % (raw)'] < 0 else "off"
                     st.metric("Harga Terkini", row["Harga Terkini"], row["Perubahan %"], delta_color=delta_color)
                     col1, col2 = st.columns(2)
                     col1.markdown(f"**RSI:** {row['Status RSI']}")
                     col2.markdown(f"**MACD:** {row['Status MACD']}")
+
+            # Tombol Simpan Watchlist ke Excel (di dalam tab)
+            col_w_a, col_w_b = st.columns([1, 3])
+            with col_w_a:
+                if st.button("💾 Simpan Watchlist ke Excel"):
+                    wt.save_to_excel()
+            with col_w_b:
+                st.info("Simpan daftar watchlist Anda. File: watchlist_data.xlsx (lokal).")
 
     # --- Panel Sinyal & Backtesting ---
     st.markdown("---")
@@ -478,11 +470,13 @@ with st.sidebar:
         if submitted and port_symbol_input and port_price and port_qty_lots:
             # Normalisasi ticker dan konversi Lot ke Lembar
             port_symbol = _normalize_ticker(port_symbol_input)
-            port_qty_lembar = port_qty_lots * 100
+            port_qty_lembar = int(port_qty_lots) * 100
             pt.add_holding(port_symbol, port_price, port_qty_lembar)
+            st.success(f"Berhasil menambahkan {port_symbol} ({port_qty_lots} Lot).")
             st.rerun() 
 
     holdings = pt.get_holdings()
+    selected_holding = None
     if holdings:
         st.markdown("---")
         st.write("Edit/Hapus Saham")
@@ -505,7 +499,7 @@ with st.sidebar:
                     st.write(f"Edit {selected_holding['symbol']}")
                     # UPGRADE V2.1.1: Ambil input mentah
                     edit_symbol_input = st.text_input("Simbol Baru", value=selected_holding['symbol'].replace(".JK", ""), key="e_sym")
-                    edit_price = st.number_input("Harga Beli Baru", min_value=1.0, step=1.0, value=selected_holding['buy_price'], key="e_price")
+                    edit_price = st.number_input("Harga Beli Baru", min_value=1.0, step=1.0, value=float(selected_holding['buy_price']), key="e_price")
                     # UPGRADE V2.1.1: Tampilkan dan ambil input dalam Lot
                     edit_qty_lots = st.number_input("Jumlah Lot Baru", min_value=1, step=1, value=int(selected_holding['quantity'] / 100), key="e_qty", format="%i")
                     
@@ -513,7 +507,7 @@ with st.sidebar:
                     if edit_submitted:
                         # Normalisasi ticker dan konversi Lot ke Lembar
                         edit_symbol = _normalize_ticker(edit_symbol_input)
-                        edit_qty_lembar = edit_qty_lots * 100
+                        edit_qty_lembar = int(edit_qty_lots) * 100
                         pt.update_holding(selected_index, edit_symbol, edit_price, edit_qty_lembar)
                         st.success(f"Berhasil memperbarui {edit_symbol}.")
                         st.rerun() 
@@ -532,7 +526,8 @@ with st.sidebar:
                 if temp_data is not None and 'Close' in temp_data.columns and not temp_data.empty:
                     price_dict[t] = temp_data.iloc[-1]['Close']
                 else: price_dict[t] = 0.0
-            except Exception: price_dict[t] = 0.0
+            except Exception:
+                price_dict[t] = 0.0
         return price_dict
 
     tickers_in_portfolio = list(set(h['symbol'] for h in holdings))
@@ -579,4 +574,3 @@ if selected_ticker:
 # Tambahkan else untuk Tampilan Awal
 else:
     st.info("Silakan masukkan Simbol Saham di sidebar (kiri) untuk memulai analisis.")
-
