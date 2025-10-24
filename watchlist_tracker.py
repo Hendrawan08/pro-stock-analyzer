@@ -29,16 +29,18 @@ class WatchlistTracker:
         # 1. Panggil fungsi global yang di-cache
         self.conn = get_watchlist_connection()
             
+    # --- PERBAIKAN V4.2 DI SINI ---
     @st.cache_data(ttl=60, show_spinner="Mengambil data watchlist...")
-    def get_watchlist(self) -> list:
+    def get_watchlist(_self) -> list: # <-- 'self' diubah menjadi '_self'
         """Mengambil daftar ticker dari database."""
-        # Fungsi ini tidak perlu diubah
-        df = self.conn.query("SELECT symbol FROM watchlist ORDER BY symbol ASC;")
+        # '_self' digunakan untuk mengakses koneksi
+        df = _self.conn.query("SELECT symbol FROM watchlist ORDER BY symbol ASC;") 
         return df['symbol'].tolist()
+    # ------------------------------
 
     def add_to_watchlist(self, symbol: str):
         """Menambahkan ticker baru ke database."""
-        # Fungsi ini tidak perlu diubah
+        # Fungsi ini tidak di-cache, jadi 'self' tetap aman
         symbol = symbol.upper()
         if not symbol:
             st.toast("⚠️ Simbol tidak boleh kosong.")
@@ -60,7 +62,7 @@ class WatchlistTracker:
         
     def remove_from_watchlist(self, symbol: str):
         """Menghapus ticker dari database."""
-        # Fungsi ini tidak perlu diubah
+        # Fungsi ini tidak di-cache, jadi 'self' tetap aman
         symbol = symbol.upper()
         with self.conn.session as s:
             s.execute(st.text("DELETE FROM watchlist WHERE symbol = :symbol;"), 
@@ -69,4 +71,4 @@ class WatchlistTracker:
         self.get_watchlist.clear() # Hapus cache
         st.toast(f"🗑️ {symbol} dihapus dari Watchlist.")
         st.rerun()
-
+        

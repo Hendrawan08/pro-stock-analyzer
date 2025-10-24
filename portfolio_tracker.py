@@ -28,16 +28,18 @@ class PortfolioTracker:
         # 1. Panggil fungsi global yang di-cache
         self.conn = get_portfolio_connection()
             
+    # --- PERBAIKAN V4.2 DI SINI ---
     @st.cache_data(ttl=60, show_spinner="Mengambil data portofolio...")
-    def get_holdings(self) -> list:
+    def get_holdings(_self) -> list: # <-- 'self' diubah menjadi '_self'
         """Mengambil daftar holdings dari database."""
-        # Fungsi ini tidak perlu diubah
-        df = self.conn.query("SELECT * FROM portfolio ORDER BY id ASC;")
+        # '_self' digunakan untuk mengakses koneksi
+        df = _self.conn.query("SELECT * FROM portfolio ORDER BY id ASC;")
         return df.to_dict('records')
+    # ------------------------------
 
     def add_holding(self, symbol: str, buy_price: float, quantity: int):
         """Menambahkan holding baru ke database."""
-        # Fungsi ini tidak perlu diubah
+        # Fungsi ini tidak di-cache, jadi 'self' tetap aman
         with self.conn.session as s:
             s.execute(st.text("""
                 INSERT INTO portfolio (symbol, buy_price, quantity) 
@@ -48,7 +50,7 @@ class PortfolioTracker:
         
     def remove_holding(self, index: int):
         """Menghapus holding berdasarkan indeks (mengambil ID dari list)."""
-        # Fungsi ini tidak perlu diubah
+        # Fungsi ini tidak di-cache, jadi 'self' tetap aman
         holdings = self.get_holdings()
         
         if 0 <= index < len(holdings):
@@ -61,7 +63,7 @@ class PortfolioTracker:
             
     def update_holding(self, index: int, symbol: str, buy_price: float, quantity: int):
         """Memperbarui holding berdasarkan indeks (mengambil ID dari list)."""
-        # Fungsi ini tidak perlu diubah
+        # Fungsi ini tidak di-cache, jadi 'self' tetap aman
         holdings = self.get_holdings()
         
         if 0 <= index < len(holdings):
@@ -124,3 +126,4 @@ class PortfolioTracker:
         }
         
         return df_holdings, totals
+    
