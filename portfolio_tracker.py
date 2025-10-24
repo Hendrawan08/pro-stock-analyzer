@@ -2,6 +2,24 @@
 import streamlit as st
 import pandas as pd
 
+# --- FUNGSI HELPER (DI LUAR CLASS) ---
+# Ini adalah perbaikan V3.1. Fungsi setup dipindah ke luar class
+# untuk memperbaiki bug decorator @st.cache_resource.
+@st.cache_resource(show_spinner="Menyiapkan database portofolio...")
+def _setup_portfolio_database(conn):
+    """Membuat tabel 'portfolio' jika belum ada."""
+    with conn.session as s:
+        s.execute(st.text("""
+            CREATE TABLE IF NOT EXISTS portfolio (
+                id SERIAL PRIMARY KEY,
+                symbol TEXT NOT NULL,
+                buy_price FLOAT NOT NULL,
+                quantity INTEGER NOT NULL
+            );
+        """))
+        s.commit()
+# -------------------------------------
+
 class PortfolioTracker:
     
     # KUNCI BARU: Nama koneksi di Streamlit Secrets
@@ -9,34 +27,22 @@ class PortfolioTracker:
 
     def __init__(self):
         """
-        Versi 3.0: Terhubung ke database SQL (Supabase)
-        bukan lagi st.session_state.
+        Versi 3.1: Memperbaiki bug cache decorator.
         """
         try:
-            # 1. Buat koneksi ke database
-            self.conn = st.connection(self.DB_CONNECTION_NAME, type="sql")
+            # 1. Buat koneksi
+            conn = st.connection(self.DB_CONNECTION_NAME, type="sql")
             
-            # 2. Buat tabel jika belum ada (hanya berjalan sekali)
-            self._setup_database()
+            # 2. Panggil helper setup (eksternal)
+            _setup_portfolio_database(conn)
+            
+            # 3. Simpan koneksi di instance
+            self.conn = conn
             
         except Exception as e:
             st.error(f"FATAL: Gagal terhubung ke database Portofolio. Cek 'Secrets' Anda. Error: {e}")
             st.stop()
             
-    @st.cache_resource(show_spinner="Menyiapkan database portofolio...")
-    def _setup_database(_self):
-        """Membuat tabel 'portfolio' jika belum ada."""
-        with _self.conn.session as s:
-            s.execute(st.text("""
-                CREATE TABLE IF NOT EXISTS portfolio (
-                    id SERIAL PRIMARY KEY,
-                    symbol TEXT NOT NULL,
-                    buy_price FLOAT NOT NULL,
-                    quantity INTEGER NOT NULL
-                );
-            """))
-            s.commit()
-
     @st.cache_data(ttl=60, show_spinner="Mengambil data portofolio...")
     def get_holdings(self) -> list:
         """Mengambil daftar holdings dari database."""
@@ -57,15 +63,10 @@ class PortfolioTracker:
         
     def remove_holding(self, index: int):
         """Menghapus holding berdasarkan indeks (mengambil ID dari list)."""
-        # Workaround agar tidak perlu mengubah app.py:
-        # 1. Ambil list holdings saat ini
         holdings = self.get_holdings()
         
         if 0 <= index < len(holdings):
-            # 2. Dapatkan 'id' database dari item yang dipilih
             item_id_to_delete = holdings[index]['id']
-            
-            # 3. Hapus berdasarkan 'id'
             with self.conn.session as s:
                 s.execute(st.text("DELETE FROM portfolio WHERE id = :id;"), 
                           params=dict(id=item_id_to_delete))
@@ -74,7 +75,6 @@ class PortfolioTracker:
             
     def update_holding(self, index: int, symbol: str, buy_price: float, quantity: int):
         """Memperbarui holding berdasarkan indeks (mengambil ID dari list)."""
-        # Workaround yang sama dengan remove_holding
         holdings = self.get_holdings()
         
         if 0 <= index < len(holdings):
@@ -96,8 +96,7 @@ class PortfolioTracker:
             
     def calculate_portfolio_metrics(self, holdings: list, current_price_dict: dict) -> tuple[pd.DataFrame, dict]:
         """
-        FungSI INI TIDAK PERLU DIUBAH.
-        Fungsi ini hanya kalkulator, tidak mengambil/menyimpan data.
+        Fungsi ini tidak berubah, hanya kalkulator.
         """
         
         if not holdings:
@@ -129,5 +128,5 @@ class PortfolioTracker:
             "pnl_pct": total_pnl_pct
         }
         
-        # PERBAIKAN: Menghapus tanda kurung ')' ekstra
         return df_holdings, totals
+
