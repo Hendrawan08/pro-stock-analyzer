@@ -3,12 +3,12 @@ import streamlit as st
 import pandas as pd
 
 # --- FUNGSI HELPER (DI LUAR CLASS) ---
-# Ini adalah perbaikan V3.1. Fungsi setup dipindah ke luar class
-# untuk memperbaiki bug decorator @st.cache_resource.
+# Ini adalah perbaikan V3.2. Kita mengganti 'conn' menjadi '_conn'
+# untuk memberi tahu @st.cache_resource agar mengabaikan argumen ini.
 @st.cache_resource(show_spinner="Menyiapkan database portofolio...")
-def _setup_portfolio_database(conn):
+def _setup_portfolio_database(_conn): # <--- PERBAIKAN DI SINI
     """Membuat tabel 'portfolio' jika belum ada."""
-    with conn.session as s:
+    with _conn.session as s: # <--- DAN DI SINI
         s.execute(st.text("""
             CREATE TABLE IF NOT EXISTS portfolio (
                 id SERIAL PRIMARY KEY,
@@ -27,13 +27,14 @@ class PortfolioTracker:
 
     def __init__(self):
         """
-        Versi 3.1: Memperbaiki bug cache decorator.
+        Versi 3.2: Memperbaiki bug cache decorator V3.1.
         """
         try:
             # 1. Buat koneksi
             conn = st.connection(self.DB_CONNECTION_NAME, type="sql")
             
             # 2. Panggil helper setup (eksternal)
+            # Panggilan ini tetap 'conn', definisinya yang berubah
             _setup_portfolio_database(conn)
             
             # 3. Simpan koneksi di instance
