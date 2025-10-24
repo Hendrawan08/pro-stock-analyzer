@@ -2,43 +2,31 @@
 import streamlit as st
 import pandas as pd
 
-# --- FUNGSI HELPER BARU V4.0 ---
-# SATU FUNGSI UNTUK MENGATUR SEMUANYA
+# --- FUNGSI HELPER BARU V4.1 ---
+# FUNGSI INI SEKARANG HANYA MENGHUBUNGKAN, TIDAK MEMBUAT TABEL
 @st.cache_resource(show_spinner="Menghubungkan ke database portofolio...")
 def get_portfolio_connection():
     """
-    Membuat koneksi ke DB dan setup tabel portofolio.
-    Ini akan di-cache dan hanya berjalan sekali.
+    Hanya membuat koneksi ke DB. 
+    Tabel diasumsikan sudah ada (dibuat manual di Supabase).
     """
-    conn = st.connection("supabase_db", type="sql")
-    
-    with conn.session as s:
-        s.execute(st.text("""
-            CREATE TABLE IF NOT EXISTS portfolio (
-                id SERIAL PRIMARY KEY,
-                symbol TEXT NOT NULL,
-                buy_price FLOAT NOT NULL,
-                quantity INTEGER NOT NULL
-            );
-        """))
-        s.commit()
-    return conn
+    try:
+        conn = st.connection("supabase_db", type="sql")
+        return conn
+    except Exception as e:
+        # Jika koneksi gagal, tampilkan error dan hentikan
+        st.error(f"FATAL: Gagal terhubung ke database. Cek 'Secrets' Anda. Error: {e}")
+        st.stop()
 # -------------------------------------
 
 class PortfolioTracker:
     
     def __init__(self):
         """
-        Versi 4.0: Menggunakan fungsi koneksi global (get_portfolio_connection)
-        untuk menghindari bug __init__ dan cache.
+        Versi 4.1: Menggunakan fungsi koneksi global (get_portfolio_connection)
         """
-        try:
-            # 1. Panggil fungsi global yang di-cache
-            self.conn = get_portfolio_connection()
-            
-        except Exception as e:
-            st.error(f"FATAL: Gagal terhubung ke database Portofolio. Cek 'Secrets' Anda. Error: {e}")
-            st.stop()
+        # 1. Panggil fungsi global yang di-cache
+        self.conn = get_portfolio_connection()
             
     @st.cache_data(ttl=60, show_spinner="Mengambil data portofolio...")
     def get_holdings(self) -> list:
@@ -136,4 +124,3 @@ class PortfolioTracker:
         }
         
         return df_holdings, totals
-
