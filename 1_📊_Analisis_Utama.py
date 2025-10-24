@@ -42,6 +42,38 @@ st.markdown(
         /* CSS untuk membuat metric P/L berwarna */
         [data-testid="stMetricDelta"] div { color: inherit !important; }
         [data-testid="stMetricDelta"] svg { fill: currentColor !important; }
+
+        /* ========================================================== */
+        /* UPGRADE V3.0: Tombol Navigasi Premium di Sidebar */
+        /* ========================================================== */
+        
+        /* Target link navigasi di sidebar */
+        [data-testid="stSidebarNav"] ul > li > a {
+            padding: 10px 16px;
+            margin-bottom: 8px; /* Memberi jarak antar tombol */
+            border-radius: 8px; /* Sudut membulat */
+            border: 1px solid rgba(255, 255, 255, 0.1); /* Garis batas tipis */
+            color: #FAFAFA; /* Teks putih cerah */
+            transition: all 0.2s ease-in-out; /* Animasi halus */
+        }
+        
+        /* Saat cursor di atas (hover) */
+        [data-testid="stSidebarNav"] ul > li > a:hover {
+            background-color: rgba(0, 255, 255, 0.1); /* Efek 'glow' cyan */
+            border-color: #00FFFF; /* Garis batas cyan */
+            color: #00FFFF; /* Teks cyan */
+            text-decoration: none;
+        }
+        
+        /* Untuk halaman yang sedang AKTIF */
+        [data-testid="stSidebarNav"] ul > li > a[aria-current="page"] {
+            background-color: #00FFFF; /* Latar belakang cyan solid */
+            color: #1E1E1E; /* Teks gelap agar kontras */
+            font-weight: 600;
+            border-color: #00FFFF;
+        }
+        /* ========================================================== */
+
     </style>
     # 📈 Pro Stock Analyzer: Dashboard Teknikal Interaktif
     """, unsafe_allow_html=True
@@ -519,9 +551,9 @@ with st.sidebar:
     st.sidebar.markdown("---")
     st.sidebar.caption("© 2025 Dibuat oleh Hendrawan Lotanto.")
     # ==========================================================
-    # UPGRADE V2.1.1: Update Versi
+    # UPGRADE V3.0: Update Versi
     # ==========================================================
-    st.sidebar.caption("Versi 2.1.1 (Input Polish)")
+    st.sidebar.caption("Versi 3.0.0 (Database Permanen)")
 
 
 # ==========================================================
