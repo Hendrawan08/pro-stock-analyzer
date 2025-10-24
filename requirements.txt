@@ -87,3 +87,9 @@ yfinance==0.2.66
 prophet
 matplotlib
 cmdstanpy
+holidays
+tqdm
+convertdate
+lunarcalendar
+ephem
+importlib-resources
