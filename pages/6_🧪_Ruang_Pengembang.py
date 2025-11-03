@@ -3,7 +3,18 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
-import pandas_ta as ta
+# --- pandas_ta optional (tahan ImportError agar app tidak crash) ---
+try:
+    import pandas_ta as ta
+    PANDAS_TA_AVAILABLE = True
+except Exception as e:
+    ta = None
+    PANDAS_TA_AVAILABLE = False
+    st.warning("pandas_ta tidak tersedia — indikator teknikal otomatis dinonaktifkan. Tambahkan 'pandas_ta' ke requirements.txt dan redeploy untuk mengaktifkan.")
+    # (opsional) log debug untuk developer
+    if st.session_state.get("debug_mode", False):
+        st.write(f"DEBUG: pandas_ta import error: {e}")
+
 from prophet import Prophet
 import time
 import sys, os
