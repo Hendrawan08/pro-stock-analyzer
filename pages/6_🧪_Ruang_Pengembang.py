@@ -25,7 +25,14 @@ except Exception as e:
 # ==========================================================
 # GANTI PASSWORD ANDA DI SINI
 # ==========================================================
-ADMIN_PASSWORD = "admin123"
+# Ambil password dari Streamlit secrets, fallback ke env var atau default (untuk dev)
+ADMIN_PASSWORD = None
+try:
+    ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
+except Exception:
+    # fallback dev (jika belum diset di Cloud) — *jangan* commit produksi password
+    ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+
 # ==========================================================
 
 st.set_page_config(
