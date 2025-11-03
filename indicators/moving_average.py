@@ -1,38 +1,34 @@
 import pandas as pd
-from constants import MA_CONFIG
+# --- PERBAIKAN: Impor konstanta individual ---
+from constants import MA_SHORT_WINDOW, MA_MEDIUM_WINDOW, MA_LONG_WINDOW
+# ---------------------------------------------
 
 class MovingAverage:
+    """
+    Menghitung Moving Averages (MA) sederhana.
+    """
     
-    def __init__(self, short: int = MA_CONFIG['short'], 
-                 medium: int = MA_CONFIG['medium'], 
-                 long: int = MA_CONFIG['long']):
-        """
-        Inisialisasi dengan periode MA yang dapat dikonfigurasi.
-        """
-        self.short = short
-        self.medium = medium
-        self.long = long
+    # --- PERBAIKAN: Gunakan konstanta individual ---
+    # Buat dictionary config DI DALAM class
+    MA_CONFIG = {
+        'MA_S': MA_SHORT_WINDOW,
+        'MA_M': MA_MEDIUM_WINDOW,
+        'MA_L': MA_LONG_WINDOW
+    }
+    # -----------------------------------------------
 
     def calculate(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        Menghitung Moving Average Sederhana (SMA) untuk periode pendek, menengah, dan panjang.
-        Jika data terlalu pendek, kolom MA akan diisi NaN.
+        Menghitung dan menambahkan kolom MA ke DataFrame.
         """
-        
-        # Daftar kolom MA yang harus dihitung
-        ma_periods = {
-            'MA_S': self.short, 
-            'MA_M': self.medium, 
-            'MA_L': self.long
-        }
-        
-        # Hitung MA hanya jika data cukup panjang
-        for col_name, period in ma_periods.items():
-            if len(data) >= period:
-                data[col_name] = data['Close'].rolling(window=period).mean()
+        for key, window in self.MA_CONFIG.items():
+            if window > 0 and window <= len(data):
+                data[key] = data['Close'].rolling(window=window).mean().fillna(data['Close'])
+            elif window > len(data):
+                # Jika data lebih pendek dari window, gunakan rata-rata semua data
+                data[key] = data['Close'].mean() 
             else:
-                # Jika data tidak cukup, isi dengan NaN agar tidak error
-                # Ini akan membuat aplikasi tetap berjalan
-                data[col_name] = pd.NA 
-        
+                # Fallback jika window = 0 atau negatif (seharusnya tidak terjadi)
+                data[key] = data['Close']
+                
         return data

@@ -1,17 +1,39 @@
-# indicators/bollinger_bands.py
-from indicators.base_indicator import BaseIndicator
 import pandas as pd
 import ta
-from constants import BB_WINDOW
+# --- PERBAIKAN: Impor konstanta yang benar ---
+from constants import BOLLINGER_WINDOW, BOLLINGER_STD
+# ---------------------------------------------
 
-class BollingerBands(BaseIndicator):
-    
+class BollingerBands:
+    """
+    Menghitung Bollinger Bands (BB).
+    """
+
+    # --- PERBAIKAN: Gunakan konstanta yang benar di __init__ ---
+    def __init__(self, window: int = BOLLINGER_WINDOW, std: int = BOLLINGER_STD):
+    # --------------------------------------------------------
+        self.window = window
+        self.std = std
+
     def calculate(self, data: pd.DataFrame) -> pd.DataFrame:
-        """Menambahkan Bollinger Bands ke DataFrame."""
-        bb = ta.volatility.BollingerBands(
-            data["Close"], window=BB_WINDOW, window_dev=2, fillna=False
-        )
-        data["BB_Upper"] = bb.bollinger_hband()
-        data["BB_Middle"] = bb.bollinger_mavg()
-        data["BB_Lower"] = bb.bollinger_lband()
+        """
+        Menghitung dan menambahkan kolom Bollinger Bands ke DataFrame.
+        """
+        if self.window > 0 and self.window < len(data):
+            # Menggunakan library ta untuk perhitungan
+            indicator = ta.volatility.BollingerBands(
+                close=data['Close'], 
+                window=self.window, 
+                window_dev=self.std, 
+                fillna=True
+            )
+            data['BB_High'] = indicator.bollinger_hband() # High Band
+            data['BB_Low'] = indicator.bollinger_lband()  # Low Band
+            data['BB_Mid'] = indicator.bollinger_mavg()  # Middle Band (MA)
+        else:
+            # Fallback jika data tidak cukup
+            data['BB_High'] = data['Close']
+            data['BB_Low'] = data['Close']
+            data['BB_Mid'] = data['Close']
+            
         return data

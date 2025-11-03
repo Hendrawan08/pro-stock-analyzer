@@ -1,94 +1,111 @@
 import pandas as pd
-from typing import List, Tuple
-from constants import *
-# import requests # Untuk notifikasi Telegram
+from typing import List, Tuple, Dict
+
+# Impor semua konstanta yang dibutuhkan
+from constants import (
+    RSI_OVERBOUGHT, RSI_OVERSOLD,
+    STOCH_OVERBOUGHT, STOCH_OVERSOLD,
+    MA_SHORT_WINDOW, MA_MEDIUM_WINDOW, MA_LONG_WINDOW
+)
 
 class SignalGenerator:
-    
-    def __init__(self):
-        self.last_signal_time = None 
+    """
+    Menghasilkan sinyal trading (Aksi & Tren) dan ringkasan naratif.
+    """
 
-    def _send_telegram_notification(self, message: str):
-        # Logika Notifikasi (tidak diubah)
-        pass
-
-    # ==========================================================
-    # PERBAIKAN: Tambahkan 'interval: str' sebagai argumen
-    # ==========================================================
-    def generate(self, data: pd.DataFrame, ticker: str, interval: str) -> Tuple[List[str], List[str], pd.Series]:
+    def generate(self, data: pd.DataFrame, ticker: str, interval: str) -> Tuple[List[str], List[str], Dict, str]:
         """
-        Menghasilkan sinyal dan ringkasan tren, 
-        dipisahkan menjadi Sinyal Aksi dan Konteks Tren.
+        Menganalisis baris data terakhir untuk sinyal, tren, dan narasi.
         """
-        
-        last = data.iloc[-1]
-        action_signals: List[str] = [] # Untuk sinyal Beli/Jual
-        trend_signals: List[str] = []  # Untuk sinyal Konteks/Status
-        
-        is_buy_signal = False
-        is_sell_signal = False
+        action_signals = []
+        trend_signals = []
+        narrative_summary = "" # <-- BARU
 
-        # --- 1. Analisis MACD Crossover ---
-        if last["MACD"] > last["MACD_Signal"] and last["MACD_Hist"] > 0:
-            action_signals.append("🟢 MACD Cross Up di atas 0 → Sinyal **BUY Kuat** (Momentum Positif)")
-            is_buy_signal = True
-        elif last["MACD"] > last["MACD_Signal"]:
-            action_signals.append("🟡 MACD Cross Up → Sinyal **BUY** (Momentum Awal)")
-            is_buy_signal = True
-        elif last["MACD"] < last["MACD_Signal"] and last["MACD_Hist"] < 0:
-            action_signals.append("🔴 MACD Cross Down di bawah 0 → Sinyal **SELL Kuat** (Momentum Negatif)")
-            is_sell_signal = True
+        if data.empty:
+            return action_signals, trend_signals, {}, "Data tidak cukup."
+        
+        if len(data) < 2:
+            last = data.iloc[-1].to_dict()
+            prev = last 
         else:
-            # Ini adalah KONTEKS, bukan AKSI
-            trend_signals.append("🔵 MACD → Sideways / Sinyal tidak jelas.")
-        
-        # --- 2. Analisis RSI ---
-        if last["RSI"] < RSI_OVERSOLD:
-            action_signals.append(f"🟢 RSI ({last['RSI']:.2f}) < {RSI_OVERSOLD} → **Oversold**, Potensi Rebound.")
-            is_buy_signal = True
-        elif last["RSI"] > RSI_OVERBOUGHT:
-            action_signals.append(f"🔴 RSI ({last['RSI']:.2f}) > {RSI_OVERBOUGHT} → **Overbought**, Potensi Koreksi.")
-            is_sell_signal = True
+            last = data.iloc[-1].to_dict()
+            prev = data.iloc[-2].to_dict()
+
+        # --- 1. Analisis Sinyal Aksi (Jangka Pendek) ---
+        if last["RSI"] < RSI_OVERSOLD and prev["RSI"] > RSI_OVERSOLD:
+            action_signals.append(f"🟢 RSI baru saja memasuki area Oversold ({last['RSI']:.1f}) - Sinyal Beli Potensial.")
+        elif last["RSI"] > RSI_OVERBOUGHT and prev["RSI"] < RSI_OVERBOUGHT:
+            action_signals.append(f"🔴 RSI baru saja memasuki area Overbought ({last['RSI']:.1f}) - Sinyal Jual Potensial.")
             
-        # --- 3. Analisis Stochastic ---
+        if last["MACD"] > last["MACD_Signal"] and prev["MACD"] < prev["MACD_Signal"]:
+            action_signals.append(f"🟢 MACD Cross Up (Golden Cross) - Sinyal Beli Kuat.")
+        elif last["MACD"] < last["MACD_Signal"] and prev["MACD"] > prev["MACD_Signal"]:
+            action_signals.append(f"🔴 MACD Cross Down (Death Cross) - Sinyal Jual Kuat.")
+
         if last["%K"] < STOCH_OVERSOLD and last["%D"] < STOCH_OVERSOLD and last["%K"] > last["%D"]:
-             action_signals.append(f"🟢 Stochastics Cross-Up di area Oversold → Konfirmasi **BUY**.")
-             is_buy_signal = True
+             action_signals.append(f"🟢 Stochastic Cross Up di area Oversold - Sinyal Beli.")
         elif last["%K"] > STOCH_OVERBOUGHT and last["%D"] > STOCH_OVERBOUGHT and last["%K"] < last["%D"]:
-             action_signals.append(f"🔴 Stochastics Cross-Down di area Overbought → Konfirmasi **SELL**.")
-             is_sell_signal = True
+             action_signals.append(f"🔴 Stochastic Cross Down di area Overbought - Sinyal Jual.")
 
-        # --- 4. Analisis MA (Tren Jangka Panjang) ---
-        # Ini adalah KONTEKS, bukan AKSI
-        if last["MA_S"] > last["MA_M"] and last["MA_M"] > last["MA_L"]:
-            trend_signals.append("✨ Susunan MA (**Golden Cross**) → Tren **Kuat Naik**.")
-        elif last["MA_S"] < last["MA_M"] and last["MA_M"] < last["MA_L"]:
-            trend_signals.append("💀 Susunan MA (**Death Cross**) → Tren **Kuat Turun**.")
-        else:
-            trend_signals.append("🌊 Susunan MA tidak teratur → Tren **Sideways**.")
-
-        # --- 5. Analisis Pola (Terbaru) ---
-        # (Logika "pintar" ada di 'patterns.py', jadi kita tidak perlu 'if interval' di sini)
-        if last["DB_Signal"]:
-            action_signals.append("🟢 Pola **Double Bottom** terdeteksi → Potensi Reversal Naik.")
-            is_buy_signal = True
-        if last["DT_Signal"]:
-            action_signals.append("🔴 Pola **Double Top** terdeteksi → Potensi Penurunan Harga.")
-            is_sell_signal = True
-            
-        # --- Notifikasi (Tidak diubah, tapi diperbaiki) ---
-        if (is_buy_signal or is_sell_signal) and (self.last_signal_time is None or (pd.Timestamp.now() - self.last_signal_time).seconds > 300):
-            # Hanya kirim sinyal aksi
-            notif_msg = [s for s in action_signals if "BUY" in s or "SELL" in s] 
-            
-            if is_buy_signal:
-                msg = f"🔔 Sinyal BELI Kuat terdeteksi untuk {ticker}!\nHarga: {last['Close']:.2f}\nSinyal: {', '.join(notif_msg)}"
-                self._send_telegram_notification(msg)
-                self.last_signal_time = pd.Timestamp.now()
-            elif is_sell_signal:
-                msg = f"🔔 Sinyal JUAL Kuat terdeteksi untuk {ticker}!\nHarga: {last['Close']:.2f}\nSinyal: {', '.join(notif_msg)}"
-                self._send_telegram_notification(msg)
-                self.last_signal_time = pd.Timestamp.now()
+        engulfing_signal = last.get("CDL_ENGULFING", 0)
+        if engulfing_signal == 100: action_signals.append("🟢 Pola Candlestick: Bullish Engulfing Terdeteksi.")
+        elif engulfing_signal == -100: action_signals.append("🔴 Pola Candlestick: Bearish Engulfing Terdeteksi.")
+        if last.get("CDL_HAMMER", 0) == 100: action_signals.append("🟢 Pola Candlestick: Hammer Terdeteksi (Potensi Reversal Naik).")
+        if last.get("CDL_SHOOTINGSTAR", 0) == -100: action_signals.append("🔴 Pola Candlestick: Shooting Star Terdeteksi (Potensi Reversal Turun).")
+        if last.get("CDL_DOJI", 0) != 0: action_signals.append("🟡 Pola Candlestick: Doji Terdeteksi (Indikasi Pasar Ragu/Indecision).")
+        if last.get("CDL_MORNINGSTAR", 0) == 100: action_signals.append("🟢 Pola Candlestick: Morning Star Terdeteksi (Sinyal Beli Kuat).")
+        if last.get("CDL_EVENINGSTAR", 0) == -100: action_signals.append("🔴 Pola Candlestick: Evening Star Terdeteksi (Sinyal Jual Kuat).")
         
-        # PERUBAHAN: Kembalikan KEDUA daftar sinyal
-        return action_signals, trend_signals, last
+        if interval not in ['1m', '5m', '15m']:
+            if last.get("DB_Signal", False): action_signals.append(f"🟢 Pola Double Bottom ('W') Terkonfirmasi - Sinyal Beli Jangka Panjang.")
+            if last.get("DT_Signal", False): action_signals.append(f"🔴 Pola Double Top ('M') Terkonfirmasi - Sinyal Jual Jangka Panjang.")
+
+        # --- 2. Analisis Konteks Tren (Jangka Panjang) ---
+        if last["MA_S"] > last["MA_M"]:
+            trend_signals.append(f"📈 Tren Jangka Pendek-Menengah Naik (MA{MA_SHORT_WINDOW} > MA{MA_MEDIUM_WINDOW}).")
+        else:
+            trend_signals.append(f"📉 Tren Jangka Pendek-Menengah Turun (MA{MA_SHORT_WINDOW} < MA{MA_MEDIUM_WINDOW}).")
+
+        if last["MA_M"] > last["MA_L"]:
+            trend_signals.append(f"✨ Tren Jangka Panjang NAIK (MA{MA_MEDIUM_WINDOW} > MA{MA_LONG_WINDOW}).")
+            if prev["MA_M"] < prev["MA_L"]: trend_signals.append(f"🚀 MA GOLDEN CROSS BARU SAJA TERJADI!")
+        else:
+            trend_signals.append(f"💀 Tren Jangka Panjang TURUN (MA{MA_MEDIUM_WINDOW} < MA{MA_LONG_WINDOW}).")
+            if prev["MA_M"] > prev["MA_L"]: trend_signals.append(f"☠️ MA DEATH CROSS BARU SAJA TERJADI!")
+        
+        # --- 3. BUAT RINGKASAN NARATIF (V11.1 - BARU) ---
+        try:
+            score = last.get("Sentiment_Score", 50)
+            
+            # Tentukan sentimen utama
+            if score >= 70:
+                narrative_summary = f"Secara teknikal, {ticker} terlihat **sangat bullish** (Skor {score:.0f}/100)."
+            elif score >= 50:
+                narrative_summary = f"Secara teknikal, {ticker} berada dalam tren **bullish** (Skor {score:.0f}/100)."
+            elif score > 40:
+                 narrative_summary = f"Secara teknikal, {ticker} terlihat **netral** (Skor {score:.0f}/100)."
+            else:
+                narrative_summary = f"Secara teknikal, {ticker} berada dalam tren **bearish** (Skor {score:.0f}/100)."
+
+            # Tambahkan detail pendukung
+            if last["MA_M"] > last["MA_L"]:
+                narrative_summary += " Tren jangka panjang (MA 50/100) mengkonfirmasi **kenaikan**."
+            else:
+                 narrative_summary += " Tren jangka panjang (MA 50/100) mengkonfirmasi **penurunan**."
+            
+            # Tambahkan detail momentum
+            if last["RSI"] < RSI_OVERSOLD:
+                narrative_summary += " Namun, RSI (<30) menunjukkan kondisi **jenuh jual (oversold)**."
+            elif last["RSI"] > RSI_OVERBOUGHT:
+                narrative_summary += " Namun, RSI (>70) menunjukkan kondisi **jenuh beli (overbought)**."
+            elif (last["MACD"] > last["MACD_Signal"]) and (prev["MACD"] < prev["MACD_Signal"]):
+                narrative_summary += " Momentum jangka pendek baru saja **menguat** (MACD Cross Up)."
+            elif (last["MACD"] < last["MACD_Signal"]) and (prev["MACD"] > prev["MACD_Signal"]):
+                 narrative_summary += " Momentum jangka pendek baru saja **melemah** (MACD Cross Down)."
+                 
+        except Exception as e:
+            print(f"Gagal membuat narasi: {e}")
+            narrative_summary = "Gagal membuat ringkasan otomatis."
+        # --------------------------------------------------
+
+        return action_signals, trend_signals, last, narrative_summary

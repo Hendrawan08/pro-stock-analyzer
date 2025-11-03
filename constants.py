@@ -1,41 +1,38 @@
 # constants.py
 
-import pandas as pd
-
-# Pengaturan API
+# --- Ticker Default ---
 TICKER_DEFAULT = "BBCA.JK"
-PERIOD_DEFAULT = "6mo"
-INTERVAL_DEFAULT = "1d"
 
-# Parameter Indikator
-# PERBAIKAN: Mengubah 'long' dari 50 menjadi 100 agar berbeda dari 'medium'
-MA_CONFIG = {"short": 20, "medium": 50, "long": 100} 
-RSI_WINDOW = 14
-# TAMBAHKAN KONSTANTA MACD
+# --- Periode Moving Average (MA) ---
+MA_SHORT_WINDOW = 20
+MA_MEDIUM_WINDOW = 50
+MA_LONG_WINDOW = 100
+
+# --- Periode RSI ---
+RSI_PERIOD = 14
+RSI_OVERBOUGHT = 70
+RSI_OVERSOLD = 30
+
+# --- Periode MACD ---
 MACD_FAST = 12
 MACD_SLOW = 26
 MACD_SIGNAL = 9
-# ---
-BB_WINDOW = 20
-STOCH_K = 14
-STOCH_D = 3
 
-# Ambang Batas Sinyal
-RSI_OVERBOUGHT = 70
-RSI_OVERSOLD = 30
+# --- Periode Bollinger Bands ---
+BOLLINGER_WINDOW = 20
+BOLLINGER_STD = 2
+
+# --- Periode Stochastic ---
+STOCHASTIC_K = 14
+STOCHASTIC_D = 3
+STOCHASTIC_SMOOTH_K = 3
+# --- TAMBAHKAN DUA BARIS INI ---
 STOCH_OVERBOUGHT = 80
 STOCH_OVERSOLD = 20
+# -------------------------------
 
-# Parameter Pola
-# PERBAIKAN: Mengubah default distance dari 5 ke 30 (untuk data harian)
-# Logika dinamis akan ditambahkan di reversal_patterns.py
-PATTERN_DISTANCE: int = 30 
-PATTERN_THRESHOLD: float = 0.02
-PATTERN_REVERSAL_FACTOR: float = 0.03
+# --- Pola Reversal ---
+REVERSAL_PATTERN_WINDOW = 20 # Jendela untuk mencari Puncak/Lembah
 
-# Konfigurasi Notifikasi
-TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN" 
-TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"
-
-# Logika Backtesting
-COMMISSION = 0.001
+# --- Backtester ---
+COMMISSION = 0.0025 # Biaya komisi per transaksi (misal: 0.25%)
