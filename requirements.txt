@@ -58,6 +58,7 @@ numpy==2.3.4
 openpyxl==3.1.5
 packaging==25.0
 pandas==2.3.3
+pandas-ta>=0.3.14b0
 peewee==3.18.2
 pillow==11.3.0
 platformdirs==4.5.0
