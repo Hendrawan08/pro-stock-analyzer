@@ -1,30 +1,47 @@
 # pages/3_🔮_Prediksi_ML.py (perbaikan)
+
+from utils.auth import check_password
+import os
+import sys
+
+# pastikan root folder ada di sys.path sehingga import internal bekerja
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
 import plotly.graph_objects as go
 
-# --- PENTING: Impor dari root folder ---
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-# ----------------------------------------
-
-# Cek instalasi Prophet
+# cek Prophet
 try:
     from prophet import Prophet
-except ImportError:
+except Exception:
     st.error("Library 'prophet' tidak ditemukan. Silakan instal: pip install prophet")
     st.stop()
 
+# import modul internal (pastikan Anda menjalankan streamlit dari root project)
 try:
     from data.data_manager import fetch_data
     from constants import TICKER_DEFAULT
-except ImportError:
+except Exception:
     st.error("Gagal mengimpor modul internal. Pastikan Anda menjalankan Streamlit dari folder root.")
     st.stop()
 
+# ==========================================================
+# PASSWORD ANDA DI SINI
+# ==========================================================
+
+if not check_password("🔮 Prediksi_ML"):
+    st.stop()  # Hentikan eksekusi sisa skrip jika password salah
+
+# --- Jika lolos, lanjutkan ke konten admin ---
+st.success("Password Diterima. Selamat Datang, Kreator!")
+
+# ==========================================================
+
+# ---- setelah login berhasil, lanjutkan sisa halaman prediksi ML ----
+st.write("Selamat datang di halaman Prediksi ML. (Konten halaman ditempatkan di bawah.)")
 st.set_page_config(page_title="Prediksi Harga (Prophet)", layout="wide")
 st.markdown("# 🔮 Prediksi Harga Jangka Panjang (via Prophet)")
 st.markdown("""

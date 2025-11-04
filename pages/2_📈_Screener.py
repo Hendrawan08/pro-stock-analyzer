@@ -1,20 +1,41 @@
-# pages/2_📈_Screener.py
+# pages/2_📈_Screener.py (perbaikan bagian auth)
+
+from utils.auth import check_password
+import sys
+import os
+from pathlib import Path
 
 import streamlit as st
 import pandas as pd
 import yfinance as yf
 import plotly.graph_objects as go
 
-# --- PENTING: Impor dari root folder ---
-import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-# ----------------------------------------
+# pastikan root project ada di sys.path (hanya sekali)
+ROOT = Path(__file__).resolve().parents[1]
+ROOT_STR = str(ROOT)
+if ROOT_STR not in sys.path:
+    sys.path.insert(0, ROOT_STR)
+
+# import internal modules (error message informatif)
 try:
     from analysis.analyzer import fetch_and_analyze_data
     from constants import RSI_OVERSOLD, RSI_OVERBOUGHT, MA_MEDIUM_WINDOW, MA_LONG_WINDOW
-except ImportError:
-    st.error("Gagal mengimpor modul. Pastikan Anda menjalankan Streamlit dari folder root.")
+except Exception as e:
+    st.error("Gagal mengimpor modul internal. Pastikan Anda menjalankan Streamlit dari root proyek.")
+    st.caption(f"Detil error import: {type(e).__name__}: {e}")
     st.stop()
+
+# ==========================================================
+# PASSWORD ANDA DI SINI
+# ==========================================================
+
+if not check_password("📈 Screener"):
+    st.stop()  # Hentikan eksekusi sisa skrip jika password salah
+
+# --- Jika lolos, lanjutkan ke konten admin ---
+st.success("Password Diterima. Selamat Datang, Kreator!")
+
+# ==========================================================
 
 # ==========================================================
 # KONFIGURASI HALAMAN

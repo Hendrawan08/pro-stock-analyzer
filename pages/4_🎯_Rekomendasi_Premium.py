@@ -1,5 +1,6 @@
 #pages/ 4_🎯_Rekomendasi_Premium.py
 
+from utils.auth import check_password
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -19,6 +20,18 @@ try:
 except ImportError:
     st.error("Gagal mengimpor modul. Pastikan Anda menjalankan Streamlit dari folder root 'pro-stock-analyzer'.")
     st.stop()
+
+# ==========================================================
+# PASSWORD ANDA DI SINI
+# ==========================================================
+
+if not check_password("🎯 Rekomendasi Premium"):
+    st.stop()  # Hentikan eksekusi sisa skrip jika password salah
+
+# --- Jika lolos, lanjutkan ke konten admin ---
+st.success("Password Diterima. Selamat Datang, Kreator!")
+
+# ==========================================================
 
 # UI: ML confidence threshold sebagai persen (user friendly)
 ml_conf_threshold_pct = st.sidebar.slider(

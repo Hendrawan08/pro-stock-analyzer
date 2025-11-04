@@ -1,5 +1,11 @@
 # pages/7_📈_Simulasi_Trading.py
-import streamlit as st
+
+from utils.auth import check_password
+import os
+try:
+    import streamlit as st
+except Exception:
+    st = None
 import pandas as pd
 import yfinance as yf
 import plotly.graph_objects as go
@@ -16,6 +22,18 @@ try:
 except ImportError:
     st.error("Gagal mengimpor modul. Pastikan menjalankan Streamlit dari folder root.")
     st.stop()
+
+# ==========================================================
+# PASSWORD ANDA DI SINI
+# ==========================================================
+
+if not check_password("📈 Simulasi Trading"):
+    st.stop()  # Hentikan eksekusi sisa skrip jika password salah
+
+# --- Jika lolos, lanjutkan ke konten admin ---
+st.success("Password Diterima. Selamat Datang, Kreator!")
+
+# ==========================================================
 
 # ======== KONFIGURASI HALAMAN ========
 st.set_page_config(page_title="Simulasi Trading", layout="wide")
